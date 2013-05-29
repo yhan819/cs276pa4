@@ -165,7 +165,7 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum):
           #tf_log = 0
           #if tf_normal > 0:
             #tf_log = 1 + math.log(tf_normal)
-        total_vecs = [normalize(url_vec), normalize(title_vec), normalize(header_vec), normalize(body_vec), normalize(anchor_vec)]
+        total_vecs = [url_vec, title_vec, header_vec, body_vec, anchor_vec]
         for i in range(0, 5):
           tfidf = 0.0
           for j in range(0, len(terms)):
@@ -175,17 +175,6 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum):
       
     return result, index_map
 
-def normalize(vec):
-  '''
-  sqr_sum = 0
-  for v in vec:
-    sqr_sum += v * v
-  if sqr_sum > 0:
-    for i in range(0,len(vec)):
-      vec[i] /= math.sqrt(sqr_sum)
-  return vec
-  '''
-  return vec
 
 
 ###############################
@@ -196,8 +185,6 @@ def pointwise_train_features(train_data_file, train_rel_file):
   scores = extractScores(train_rel_file)
   (docNum, doc_freq_dict) = getIdf()
   (f_vecs, index_map) = get_feature_vecs(queries, features, doc_freq_dict, docNum)
-  print >> sys.stderr, len(f_vecs)
-  print >> sys.stderr, len(scores)
   return (f_vecs, scores)
  
 def pointwise_test_features(test_data_file):
