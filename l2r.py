@@ -5,7 +5,7 @@ import sys
 import math
 import re
 import numpy as np
-from sklearn import linear_model, svm
+from sklearn import linear_model, svm, preprocessing
 
 def extractFeatures(featureFile):
     f = open(featureFile, 'r')
@@ -86,7 +86,7 @@ def getIdf():
   
   return (docNum, doc_freq_dict)
 
-def get_feature_vecs(queries, features, dfDict, totalDocNum):
+def get_feature_vecs(queries, features, dfDict, totalDocNum, task):
     result = []
     index = 0
     index_map = {}
@@ -117,21 +117,20 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum):
         header_vec = []
         body_vec = []
         anchor_vec = []
-        #body_length = info["body_length"] + 50
-        body_length = 1
+        body_length = info["body_length"] + 100
         for term in terms:
           tf_url = 0
           for i in range(0, len(url)-len(term)+1):
             if url[i:i+len(term)] == term:
               tf_url = tf_url + 1
-          if tf_url == 0:
+          if tf_url == 0 and task == 1:
             tf_url = 1
           tf_title = 0
           if "title" in info:
             for word in info["title"].split(" "):
               if word == term:
                 tf_title = tf_title + 1
-          if tf_title == 0:
+          if tf_title == 0 and task == 1:
             tf_title = 1
           tf_header = 0
 	  if "header" in info:
@@ -139,13 +138,13 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum):
               for word in header.split(" "):
                 if word == term:
                   tf_header = tf_header + 1
-          if tf_header == 0:
+          if tf_header == 0 and task == 1:
             tf_header = 1
           tf_body = 0
           if "body_hits" in info:
             if term in info["body_hits"]:
               tf_body = len(info["body_hits"][term])
-          if tf_body == 0:
+          if tf_body == 0 and task == 1:
             tf_body = 1
           tf_anchor = 0
           if "anchors" in info:
@@ -155,13 +154,20 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum):
                 if word == term:
                   count_per_anchor = count_per_anchor + 1
               tf_anchor = tf_anchor + count_per_anchor * info["anchors"][text]
-          if tf_anchor == 0:
+          if tf_anchor == 0 and task == 1:
             tf_anchor = 1
-          url_vec.append(1.0 * math.log(tf_url) / body_length)
-          title_vec.append(1.0 * math.log(tf_title) / body_length)
-          header_vec.append(1.0 * math.log(tf_header) / body_length)
-          body_vec.append(1.0 * math.log(tf_body) / body_length)
-          anchor_vec.append(1.0 * math.log(tf_anchor) / body_length)
+          if task == 1:
+            url_vec.append(1.0 * math.log(tf_url) )
+            title_vec.append(1.0 * math.log(tf_title) )
+            header_vec.append(1.0 * math.log(tf_header) )
+            body_vec.append(1.0 * math.log(tf_body) )
+            anchor_vec.append(1.0 * math.log(tf_anchor) )
+          elif task == 2:
+            url_vec.append(1.0 * (tf_url) / body_length)
+            title_vec.append(1.0 * (tf_title) / body_length)
+            header_vec.append(1.0 * (tf_header) / body_length)
+            body_vec.append(1.0 * (tf_body) / body_length)
+            anchor_vec.append(1.0 * (tf_anchor) / body_length)
           #tf_log = 0
           #if tf_normal > 0:
             #tf_log = 1 + math.log(tf_normal)
@@ -175,7 +181,38 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum):
       
     return result, index_map
 
-
+def pair_docs(f_vecs, scores, queries, index_map):
+  f_vecs = preprocessing.scale(f_vecs)
+  pairs = []
+  y = []
+  num1 = 0
+  numm1 = 0
+  for q in queries:
+    urls = queries[q]
+    for i in range(0, len(urls)):
+      for j in range(i, len(urls)):
+        a = f_vecs[index_map[q][urls[i]]]
+        b = f_vecs[index_map[q][urls[j]]]
+        tmp = []
+        for k in range(0, len(a)):
+          tmp.append(0.0 + a[k] - b[k])
+        pairs.append(tmp)
+        if scores[index_map[q][urls[i]]] > scores[index_map[q][urls[j]]]:
+          score = 1
+        elif scores[index_map[q][urls[i]]] < scores[index_map[q][urls[j]]]:
+          score = -1
+        else:
+            score = -1
+        #score = 1 if scores[index_map[q][urls[i]]] > scores[index_map[q][urls[j]]] else -1
+        if score == 1: 
+          num1 += 1
+        else: 
+          numm1 +=1
+        y.append(score)
+  print >> sys.stderr, "num1 : %s" % str(num1)
+  print >> sys.stderr, "numm1 : %s" % str(numm1)
+  return (pairs, y)
+          
 
 ###############################
 ##### Point-wise approach #####
@@ -184,13 +221,13 @@ def pointwise_train_features(train_data_file, train_rel_file):
   (queries, features) = extractFeatures(train_data_file)
   scores = extractScores(train_rel_file)
   (docNum, doc_freq_dict) = getIdf()
-  (f_vecs, index_map) = get_feature_vecs(queries, features, doc_freq_dict, docNum)
+  (f_vecs, index_map) = get_feature_vecs(queries, features, doc_freq_dict, docNum, 1)
   return (f_vecs, scores)
  
 def pointwise_test_features(test_data_file):
   (queries, features) = extractFeatures(test_data_file)
   (docNum, doc_freq_dict) = getIdf()
-  (f_vecs, index_map) = get_feature_vecs(queries, features, doc_freq_dict, docNum)
+  (f_vecs, index_map) = get_feature_vecs(queries, features, doc_freq_dict, docNum, 1)
   
   # index_map[query][url] = i means X[i] is the feature vector of query and url
 
@@ -211,27 +248,41 @@ def pointwise_testing(X, model):
 ##### Pair-wise approach #####
 ##############################
 def pairwise_train_features(train_data_file, train_rel_file):
-  X = [[0, 0], [1, 1], [2, 2]]
-  y = [0, 1, 2]
+  (queries, features) = extractFeatures(train_data_file)
+  scores = extractScores(train_rel_file)
+  (docNum, doc_freq_dict) = getIdf()
+  (f_vecs, index_map) = get_feature_vecs(queries, features, doc_freq_dict, docNum, 2)
+  (X, y) = pair_docs(f_vecs, scores, queries, index_map)
+  
   return (X, y)
 
 def pairwise_test_features(test_data_file):
+  (queries, features) = extractFeatures(test_data_file)
+  (docNum, doc_freq_dict) = getIdf()
+  (f_vecs, index_map) = get_feature_vecs(queries, features, doc_freq_dict, docNum, 2)
   # stub, you need to implement
-  X = [[0.5, 0.5], [1.5, 1.5]]  
-  queries = ['query1', 'query2']
   # index_map[query][url] = i means X[i] is the feature vector of query and url
-  index_map = {'query1' : {'url1':0}, 'query2': {'url2':1}}
+  # RIGHT NOW SCALING 
+  #f_vecs = preprocessing.scale(f_vecs)
 
-  return (X, queries, index_map)
+  return (f_vecs, queries, index_map)
 
 def pairwise_learning(X, y):
   # stub, you need to implement
   model = svm.SVC(kernel='linear', C=1.0)
+  model.fit(X,y)
   return model
 
 def pairwise_testing(X, model):
   # stub, you need to implement
-  y = [0.5, 1.5]
+  coefs = model.coef_[0]
+  y = []
+  for x in X:
+    score = 0.0
+    for i in range(0, len(x)):
+      score += 1.0 * x[i] * coefs[i]
+    y.append(score)
+  
   return y
 
 ####################
