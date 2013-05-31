@@ -57,13 +57,30 @@ def main(myRankFile, groundTruthFile):
         url = temp[0].strip()
         rel = float(temp[1].strip())
         groundTruth[query][url] = rel
-            
+    
+    ndcgmap = {}        
+    totalNdcgScore = 0
+    omap = {} 
     #go through each query of rank file and calculate ndcg
     for (query, results) in getQueries(myRankFile):
-      ndcgScore += getNDCG(results, groundTruth[query])
+      ndcgScore = getNDCG(results, groundTruth[query])
+      ndcgmap[ndcgScore] = query
+      omap[query] = ndcgScore
+      totalNdcgScore += ndcgScore
       numQueries += 1
 
-    print ndcgScore/numQueries
+    print totalNdcgScore/numQueries
+
+    items = 0
+    for score in sorted(ndcgmap.keys()):
+      #if ndcgmap[score] in ["query: stanford scpd mscs", "query: stanford vaden pharmacy hours", "query: palm drive", "query: nvidia auditorium"]:
+      #  print ndcgmap[score], score
+      items += 1
+      
+      if items < 20:
+        print ndcgmap[score], score
+    #for q in sorted(omap.keys()):
+      #print q, omap[q]
        
 if __name__=='__main__':
     if (len(sys.argv) < 3):

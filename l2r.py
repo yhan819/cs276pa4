@@ -475,6 +475,8 @@ def pair_docs(f_vecs, scores, queries, index_map):
   f_vecs = preprocessing.scale(f_vecs)
   pairs = []
   y = []
+  num1 = 0
+  numm1 = 0
   for q in queries:
     urls = queries[q]
     for i in range(0, len(urls)):
@@ -547,7 +549,7 @@ def pairwise_test_features(test_data_file):
   # stub, you need to implement
   # index_map[query][url] = i means X[i] is the feature vector of query and url
   # RIGHT NOW SCALING 
-  #f_vecs = preprocessing.scale(f_vecs)
+  f_vecs = preprocessing.scale(f_vecs)
 
   return (f_vecs, queries, index_map)
 
