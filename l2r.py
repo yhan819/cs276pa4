@@ -43,7 +43,6 @@ def extractFeatures(featureFile):
           features[query][url]['anchors'] = {}
       elif(key == 'stanford_anchor_count'):
         features[query][url]['anchors'][anchor_text] = int(value)
-      
     f.close()
     return (queries, features) 
 
@@ -112,19 +111,27 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum, task):
         index += 1
         info = features[query][url]
         doc_vector = []
+
         url_vec = []
         title_vec = []
         header_vec = []
         body_vec = []
         anchor_vec = []
         body_length = info["body_length"] + 100
+        pagerank = info['pagerank']
+        pdf = 0
+        if url[len(url)-4:len(url)] == ".pdf":
+          pdf = 1
+
         for term in terms:
+          #url
           tf_url = 0
           for i in range(0, len(url)-len(term)+1):
             if url[i:i+len(term)] == term:
               tf_url = tf_url + 1
           if tf_url == 0 and task == 1:
             tf_url = 1
+          #tf_title
           tf_title = 0
           if "title" in info:
             for word in info["title"].split(" "):
@@ -132,6 +139,7 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum, task):
                 tf_title = tf_title + 1
           if tf_title == 0 and task == 1:
             tf_title = 1
+          #tf_header
           tf_header = 0
 	  if "header" in info:
             for header in info["header"]:
@@ -140,12 +148,14 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum, task):
                   tf_header = tf_header + 1
           if tf_header == 0 and task == 1:
             tf_header = 1
+          #tf_body
           tf_body = 0
           if "body_hits" in info:
             if term in info["body_hits"]:
               tf_body = len(info["body_hits"][term])
           if tf_body == 0 and task == 1:
             tf_body = 1
+          #tf_anchor
           tf_anchor = 0
           if "anchors" in info:
             for text in info["anchors"]:
@@ -156,13 +166,15 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum, task):
               tf_anchor = tf_anchor + count_per_anchor * info["anchors"][text]
           if tf_anchor == 0 and task == 1:
             tf_anchor = 1
+          #Task 1: used scaling
           if task == 1:
             url_vec.append(1.0 * math.log(tf_url) )
             title_vec.append(1.0 * math.log(tf_title) )
             header_vec.append(1.0 * math.log(tf_header) )
             body_vec.append(1.0 * math.log(tf_body) )
             anchor_vec.append(1.0 * math.log(tf_anchor) )
-          elif task == 2:
+          #Task 2: used normalization
+          elif task == 2 or task == 3:
             url_vec.append(1.0 * (tf_url) / body_length)
             title_vec.append(1.0 * (tf_title) / body_length)
             header_vec.append(1.0 * (tf_header) / body_length)
@@ -177,6 +189,11 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum, task):
           for j in range(0, len(terms)):
             tfidf += query_vector[j] * total_vecs[i][j]
           doc_vector.append(tfidf)
+        num_pdf = 0
+        if task == 3:
+          doc_vector.append(pdf)
+          print >> sys.stderr, pdf
+          #doc_vector.append(pagerank)
         result.append(doc_vector)
       
     return result, index_map
@@ -185,8 +202,6 @@ def pair_docs(f_vecs, scores, queries, index_map):
   f_vecs = preprocessing.scale(f_vecs)
   pairs = []
   y = []
-  num1 = 0
-  numm1 = 0
   for q in queries:
     urls = queries[q]
     for i in range(0, len(urls)):
@@ -204,13 +219,7 @@ def pair_docs(f_vecs, scores, queries, index_map):
         else:
             score = -1
         #score = 1 if scores[index_map[q][urls[i]]] > scores[index_map[q][urls[j]]] else -1
-        if score == 1: 
-          num1 += 1
-        else: 
-          numm1 +=1
         y.append(score)
-  print >> sys.stderr, "num1 : %s" % str(num1)
-  print >> sys.stderr, "numm1 : %s" % str(numm1)
   return (pairs, y)
           
 
@@ -259,7 +268,7 @@ def pairwise_train_features(train_data_file, train_rel_file):
 def pairwise_test_features(test_data_file):
   (queries, features) = extractFeatures(test_data_file)
   (docNum, doc_freq_dict) = getIdf()
-  (f_vecs, index_map) = get_feature_vecs(queries, features, doc_freq_dict, docNum, 2)
+  (f_vecs, index_map) = get_feature_vecs(queries, features, doc_freq_dict, docNum, 2) 
   # stub, you need to implement
   # index_map[query][url] = i means X[i] is the feature vector of query and url
   # RIGHT NOW SCALING 
@@ -285,6 +294,29 @@ def pairwise_testing(X, model):
   
   return y
 
+#####################################################
+##### Pairwise with additional features approach #####
+#####################################################
+def pairwise_train_features_add(train_data_file, train_rel_file):
+  (queries, features) = extractFeatures(train_data_file)
+  scores = extractScores(train_rel_file)
+  (docNum, doc_freq_dict) = getIdf()
+  (f_vecs, index_map) = get_feature_vecs(queries, features, doc_freq_dict, docNum, 3)
+  (X, y) = pair_docs(f_vecs, scores, queries, index_map)
+  
+  return (X, y)
+
+def pairwise_test_features_add(test_data_file):
+  (queries, features) = extractFeatures(test_data_file)
+  (docNum, doc_freq_dict) = getIdf()
+  (f_vecs, index_map) = get_feature_vecs(queries, features, doc_freq_dict, docNum, 3)
+  # stub, you need to implement
+  # index_map[query][url] = i means X[i] is the feature vector of query and url
+  # RIGHT NOW SCALING 
+  #f_vecs = preprocessing.scale(f_vecs)
+
+  return (f_vecs, queries, index_map)
+
 ####################
 ##### Training #####
 ####################
@@ -293,24 +325,21 @@ def train(train_data_file, train_rel_file, task):
   
   if task == 1:
     # Step (1): construct your feature and label arrays here
-    (X, y) = pointwise_train_features(train_data_file, train_rel_file)
-    
+    (X, y) = pointwise_train_features(train_data_file, train_rel_file) 
     # Step (2): implement your learning algorithm here
     model = pointwise_learning(X, y)
   elif task == 2:
     # Step (1): construct your feature and label arrays here
     (X, y) = pairwise_train_features(train_data_file, train_rel_file)
-    
     # Step (2): implement your learning algorithm here
     model = pairwise_learning(X, y)
   elif task == 3: 
     # Add more features
-    print >> sys.stderr, "Task 3\n"
-
+    (X, y) = pairwise_train_features_add(train_data_file, train_rel_file)
+    model = pairwise_learning(X, y)
   elif task == 4: 
     # Extra credit 
     print >> sys.stderr, "Extra Credit\n"
-
   else: 
     X = [[0, 0], [1, 1], [2, 2]]
     y = [0, 1, 2]
@@ -318,8 +347,8 @@ def train(train_data_file, train_rel_file, task):
     model.fit(X, y)
   
   # some debug output
-  weights = model.coef_
-  print >> sys.stderr, "Weights:", str(weights)
+  #weights = model.coef_
+  #print >> sys.stderr, "Weights:", str(weights)
 
   return model 
 
@@ -343,12 +372,15 @@ def test(test_data_file, model, task):
     y = pairwise_testing(X, model)
   elif task == 3: 
     # Add more features
-    print >> sys.stderr, "Task 3\n"
-
+    # Step (1): construct your test feature arrays here
+    (X, queries, index_map) = pairwise_test_features_add(test_data_file)
+    
+    # Step (2): implement your prediction code here
+    y = pairwise_testing(X, model)
+ 
   elif task == 4: 
     # Extra credit 
     print >> sys.stderr, "Extra credit\n"
-
   else:
     queries = ['query1', 'query2']
     index_map = {'query1' : {'url1':0}, 'query2': {'url2':1}}
@@ -381,8 +413,6 @@ if __name__ == '__main__':
   test_data_file = sys.argv[3]
   task = int(sys.argv[4])
   print >> sys.stderr, "### Running task", task, "..."
- 
   
   model = train(train_data_file, train_rel_file, task)
-  
   test(test_data_file, model, task)
