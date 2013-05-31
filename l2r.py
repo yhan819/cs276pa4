@@ -176,6 +176,11 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum, task, count):
     result = []
     index = 0
     index_map = {}
+    _pdf = True
+    _pagerank = False
+    _window = True
+    _bmf = True
+    _body = False
 
     for query in queries:
       index_map[query] = {}
@@ -208,19 +213,21 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum, task, count):
         body_vec = []
         anchor_vec = []
         body_length = info["body_length"] + 100
+
+        total_bodyhit = 0
         pagerank = info['pagerank']
         pdf = 0
         if url[len(url)-4:len(url)] == ".pdf":
           pdf = 1
         window_sizes = [float("inf"), float("inf"), float("inf"), float("inf"), float("inf")]
-
+	
         for term in terms:
           #url
           tf_url = 0
           for i in range(0, len(url)-len(term)+1):
             if url[i:i+len(term)] == term:
               tf_url = tf_url + 1
-          if tf_url == 0 and task == 1:
+	  if tf_url == 0 and task == 1:
             tf_url = 1
           #tf_title
           tf_title = 0
@@ -244,6 +251,7 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum, task, count):
           if "body_hits" in info:
             if term in info["body_hits"]:
               tf_body = len(info["body_hits"][term])
+	      total_bodyhit += tf_body
           if tf_body == 0 and task == 1:
             tf_body = 1
           #tf_anchor
@@ -270,20 +278,22 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum, task, count):
             title_vec.append(1.0 * (tf_title))
             header_vec.append(1.0 * (tf_header))
             body_vec.append(1.0 * (tf_body))
-            anchor_vec.append(1.0 * (tf_anchor))
-          #tf_log = 0
-          #if tf_normal > 0:
-            #tf_log = 1 + math.log(tf_normal)
+            anchor_vec.append(1.0 * (tf_anchor)) 
         total_vecs = [url_vec, title_vec, header_vec, body_vec, anchor_vec]
         for i in range(0, 5):
           tfidf = 0.0
           for j in range(0, len(terms)):
             tfidf += query_vector[j] * total_vecs[i][j]
-          doc_vector.append(tfidf)
-        
+	  if i != 3:
+            doc_vector.append(tfidf)
+          else:
+ 	    if task != 3:
+	      doc_vector.append(tfidf)
         if task == 3:
-          doc_vector.append(pdf)
-          #doc_vector.append(pagerank)
+          if _pdf:
+            doc_vector.append(pdf)
+          if _pagerank:
+            doc_vector.append(pagerank)
           
           # url
           #url_contained = allInText(query, url)
@@ -352,15 +362,13 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum, task, count):
           
           minWindow = 0
           for i in range(1, len(window_sizes)):
-            #doc_vector.append(1/(1.0*window_sizes[i]))
-            #if minWindow < (1/(1.0*window_sizes[i])):
-              #minWindow = (1/(1.0*window_sizes[i]))
- 	    if window_sizes[i] == len(terms):
+            if i == 4 and window_sizes[i] == len(terms):
 	      minWindow = 1
-          #if window_sizes[0] == len(query) - len(terms) + 1:
- 	    #minWindow = 1
+          if window_sizes[0] <= len(query) - len(terms) + 4:
+ 	    minWindow = 1.5
           #print >> sys.stderr, minWindow
-          doc_vector.append(minWindow)  
+          if _window:
+	    doc_vector.append(minWindow)  
         
           avgurl = count["len_url"] * 1.0 / count["num_url"]
           avgtitle = count["len_title"] * 1.0 / count["num_url"]
@@ -449,13 +457,16 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum, task, count):
             doc_score += wdt * idf / (k_1 + wdt)
 
           #nontextual: pagerank
-          nont = lamb * 1.0 * math.log(lamb_p + info["pagerank"])
+          #nont = lamb * 1.0 * math.log(lamb_p + info["pagerank"])
           #nont = lamb * info["pagerank"] / (lamb_p + info["pagerank"])
           #nont = lamb / (lamb_p + math.exp(-1 * info["pagerank"] * lamb_p))
-
+          nont = 0
           bmf_score = doc_score + nont
-          #doc_vector.append(bmf_score)
-
+          if _bmf:
+            doc_vector.append(bmf_score)
+	  if _body:
+	    doc_vector.append((1.0*total_bodyhit)/body_length)	  
+ 
         result.append(doc_vector)
 
     return result, index_map
@@ -611,8 +622,8 @@ def train(train_data_file, train_rel_file, task):
     model.fit(X, y)
   
   # some debug output
-  #weights = model.coef_
-  #print >> sys.stderr, "Weights:", str(weights)
+  weights = model.coef_
+  print >> sys.stderr, "Weights:", str(weights)
 
   return model 
 
