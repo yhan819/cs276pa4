@@ -100,7 +100,10 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum, task):
         df = 1
         if term in dfDict:
           df = df + dfDict[term]
-        idf = math.log((1.0 *(totalDocNum + 1)) / df)#math.log((totalDocNum + 1)/df)
+        if task == 1:
+          idf = math.log((1.0 *(totalDocNum + 1)) / df)#math.log((totalDocNum + 1)/df)
+        else:
+          idf = ((1.0 *(totalDocNum + 1)) / df)#math.log((totalDocNum + 1)/df)
         query_idf_list.append(idf)
       query_vector = query_idf_list
       
@@ -117,7 +120,8 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum, task):
         header_vec = []
         body_vec = []
         anchor_vec = []
-        body_length = info["body_length"] + 100
+        #body_length = info["body_length"] + 100
+        body_length = 1
         pagerank = info['pagerank']
         pdf = 0
         if url[len(url)-4:len(url)] == ".pdf":
@@ -192,7 +196,7 @@ def get_feature_vecs(queries, features, dfDict, totalDocNum, task):
         num_pdf = 0
         if task == 3:
           doc_vector.append(pdf)
-          print >> sys.stderr, pdf
+          #print >> sys.stderr, pdf
           #doc_vector.append(pagerank)
         result.append(doc_vector)
       
@@ -202,6 +206,8 @@ def pair_docs(f_vecs, scores, queries, index_map):
   f_vecs = preprocessing.scale(f_vecs)
   pairs = []
   y = []
+  num1 = 0
+  numm1 = 0
   for q in queries:
     urls = queries[q]
     for i in range(0, len(urls)):
@@ -211,15 +217,19 @@ def pair_docs(f_vecs, scores, queries, index_map):
         tmp = []
         for k in range(0, len(a)):
           tmp.append(0.0 + a[k] - b[k])
-        pairs.append(tmp)
         if scores[index_map[q][urls[i]]] > scores[index_map[q][urls[j]]]:
           score = 1
+          num1 += 1
+          pairs.append(tmp)
+          y.append(score)
         elif scores[index_map[q][urls[i]]] < scores[index_map[q][urls[j]]]:
           score = -1
+          numm1 += 1
+          pairs.append(tmp)
+          y.append(score)
         else:
-            score = -1
+          score = 1
         #score = 1 if scores[index_map[q][urls[i]]] > scores[index_map[q][urls[j]]] else -1
-        y.append(score)
   return (pairs, y)
           
 
@@ -272,7 +282,7 @@ def pairwise_test_features(test_data_file):
   # stub, you need to implement
   # index_map[query][url] = i means X[i] is the feature vector of query and url
   # RIGHT NOW SCALING 
-  #f_vecs = preprocessing.scale(f_vecs)
+  f_vecs = preprocessing.scale(f_vecs)
 
   return (f_vecs, queries, index_map)
 
@@ -347,8 +357,8 @@ def train(train_data_file, train_rel_file, task):
     model.fit(X, y)
   
   # some debug output
-  #weights = model.coef_
-  #print >> sys.stderr, "Weights:", str(weights)
+  weights = model.coef_
+  print >> sys.stderr, "Weights:", str(weights)
 
   return model 
 
